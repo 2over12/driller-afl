@@ -49,7 +49,7 @@
 
 static s32 child_pid;                 /* PID of the tested program         */
 
-static *block first_block;                /* SHM with instrumentation bitmap   */
+static block *first_block;                /* SHM with instrumentation bitmap   */
 
 static u8 *out_file,                  /* Trace output file                 */
           *doc_path,                  /* Path to docs                      */
@@ -91,27 +91,7 @@ static u8 count_class_lookup[256] = {
 
 };
 
-static void classify_counts(u8* mem) {
 
-  u32 i = MAP_SIZE;
-
-  if (edges_only) {
-
-    while (i--) {
-      if (*mem) *mem = 1;
-      mem++;
-    }
-
-  } else {
-
-    while (i--) {
-      *mem = count_class_lookup[*mem];
-      mem++;
-    }
-
-  }
-
-}
 
 
 /* Get rid of shared memory (atexit handler). */
@@ -129,7 +109,7 @@ static void setup_shm(void) {
 
   u8* shm_str;
 
-  shm_id = shmget(IPC_PRIVATE, MAP_SIZE, IPC_CREAT | IPC_EXCL | 0600);
+  shm_id = shmget(IPC_PRIVATE, ALLOC_SIZE, IPC_CREAT | IPC_EXCL | 0600);
 
   if (shm_id < 0) PFATAL("shmget() failed");
 
@@ -142,8 +122,8 @@ static void setup_shm(void) {
   ck_free(shm_str);
 
   first_block = shmat(shm_id, NULL, 0);
-  if (!first_block) PFATAL("shmat() failed");]
-  memset(first_block,0,MAP_SIZE);
+  if (!first_block) PFATAL("shmat() failed");
+  memset(first_block,0,ALLOC_SIZE);
 
 }
 
@@ -173,10 +153,9 @@ static u32 write_results(void) {
   f = fdopen(fd, "w");
 
   if (!f) PFATAL("fdopen() failed");
-  int i;
   for(i=0;i<NUM_BLOCKS;i++)
   {
-    if(first_block[i].branch1!=0||first_block[i].branch1[2]!=0)
+    if(first_block[i].branch1!=0||first_block[i].branch2!=0)
     {
     ret++;
     fprintf(f, "%06u: b1: %06u b2: %06u c1: %u c2: %u\n",i, first_block[i].branch1,first_block[i].branch2,first_block[i].count1, first_block[i].count2);
@@ -641,7 +620,7 @@ int main(int argc, char** argv) {
         usage(argv[0]);
 
     }
-    qemu_mode=1
+    qemu_mode=1;
 
   if (optind == argc || !out_file) usage(argv[0]);
 
@@ -663,7 +642,6 @@ int main(int argc, char** argv) {
     use_argv = get_qemu_argv(argv[0], argv + optind, argc - optind);
   else
     use_argv = argv + optind;
-
   run_target(use_argv);
 
   tcnt = write_results();

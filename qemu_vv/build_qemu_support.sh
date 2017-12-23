@@ -145,7 +145,7 @@ cp -f "i386-linux-user/qemu-i386" "../../tracers/vv/afl-qemu-trace" || exit 1
 cd ..
 ls -l ../tracers/i386/afl-qemu-trace || exit 1
 
-echo "[+] Successfully created '../../tracers/i386/afl-qemu-trace'."
+echo "[+] Successfully created '../../tracers/vv/afl-qemu-trace'."
 
 echo "[+] All set, you can now use the -Q mode in afl-fuzz on CGC binaries!"
 

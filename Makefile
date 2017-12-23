@@ -3,13 +3,13 @@
 # -----------------------------
 #
 # Written and maintained by Michal Zalewski <lcamtuf@google.com>
-# 
+#
 # Copyright 2013, 2014, 2015 Google Inc. All rights reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at:
-# 
+#
 #   http://www.apache.org/licenses/LICENSE-2.0
 #
 
@@ -22,7 +22,7 @@ HELPER_PATH = $(PREFIX)/lib/afl
 DOC_PATH    = $(PREFIX)/share/doc/afl
 MISC_PATH   = $(PREFIX)/share/afl
 
-PROGS       = afl-gcc afl-as afl-fuzz afl-showmap afl-tmin afl-gotcpu
+PROGS       = afl-gcc afl-as afl-fuzz afl-showmap afl-tmin afl-gotcpu afl-vv
 
 CFLAGS     ?= -O3 -funroll-loops
 CFLAGS     += -Wall -D_FORTIFY_SOURCE=2 -g -Wno-pointer-sign \
@@ -63,7 +63,7 @@ afl-gcc: afl-gcc.c $(COMM_HDR) | test_x86
 	set -e; for i in afl-g++ afl-clang afl-clang++; do ln -sf afl-gcc $$i; done
 
 afl-as: afl-as.c afl-as.h $(COMM_HDR) | test_x86
-	$(CC) $(CFLAGS) $@.c -o $@ $(LDFLAGS) 
+	$(CC) $(CFLAGS) $@.c -o $@ $(LDFLAGS)
 	ln -sf afl-as as
 
 afl-fuzz: afl-fuzz.c $(COMM_HDR) | test_x86
