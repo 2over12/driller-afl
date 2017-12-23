@@ -45,10 +45,11 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/resource.h>
+#include "vv-struct.h"
 
 static s32 child_pid;                 /* PID of the tested program         */
 
-static u8* trace_bits;                /* SHM with instrumentation bitmap   */
+static *block first_block;                /* SHM with instrumentation bitmap   */
 
 static u8 *out_file,                  /* Trace output file                 */
           *doc_path,                  /* Path to docs                      */
@@ -62,8 +63,7 @@ static u64 mem_limit = MEM_LIMIT;     /* Memory limit (MB)                 */
 static s32 shm_id;                    /* ID of the SHM region              */
 
 static u8  quiet_mode,                /* Hide non-essential messages?      */
-           edges_only,                /* Ignore hit counts?                */
-           cmin_mode;                 /* Generate output in afl-cmin mode? */
+           edges_only;                /* Ignore hit counts?                */
 
 static volatile u8
            stop_soon,                 /* Ctrl-C pressed?                   */
@@ -141,9 +141,9 @@ static void setup_shm(void) {
 
   ck_free(shm_str);
 
-  trace_bits = shmat(shm_id, NULL, 0);
-  
-  if (!trace_bits) PFATAL("shmat() failed");
+  first_block = shmat(shm_id, NULL, 0);
+  if (!first_block) PFATAL("shmat() failed");]
+  memset(first_block,0,MAP_SIZE);
 
 }
 
@@ -173,23 +173,16 @@ static u32 write_results(void) {
   f = fdopen(fd, "w");
 
   if (!f) PFATAL("fdopen() failed");
-
-  for (i = 0; i < MAP_SIZE; i++) {
-
-    if (!trace_bits[i]) continue;
+  int i;
+  for(i=0;i<NUM_BLOCKS;i++)
+  {
+    if(first_block[i].branch1!=0||first_block[i].branch1[2]!=0)
+    {
     ret++;
-
-    if (cmin_mode) {
-
-      if (child_timed_out) break;
-      if (!caa && child_crashed != cco) break;
-
-      fprintf(f, "%u%u\n", trace_bits[i], i);
-
-    } else fprintf(f, "%06u:%u\n", i, trace_bits[i]);
-
+    fprintf(f, "%06u: b1: %06u b2: %06u c1: %u c2: %u\n",i, first_block[i].branch1,first_block[i].branch2,first_block[i].count1, first_block[i].count2);
+    }
   }
-  
+
   fclose(f);
 
   return ret;
@@ -232,7 +225,7 @@ static void run_target(char** argv) {
       s32 fd = open("/dev/null", O_RDWR);
 
       if (fd < 0 || dup2(fd, 1) < 0 || dup2(fd, 2) < 0) {
-        *(u32*)trace_bits = EXEC_FAIL_SIG;
+        *(u32*)first_block = EXEC_FAIL_SIG;
         PFATAL("Descriptor initialization failed");
       }
 
@@ -261,7 +254,7 @@ static void run_target(char** argv) {
 
     execv(target_path, argv);
 
-    *(u32*)trace_bits = EXEC_FAIL_SIG;
+    *(u32*)first_block = EXEC_FAIL_SIG;
     exit(0);
 
   }
@@ -289,10 +282,9 @@ static void run_target(char** argv) {
 
   /* Clean up bitmap, analyze exit condition, etc. */
 
-  if (*(u32*)trace_bits == EXEC_FAIL_SIG)
+  if (*(u32*)first_block == EXEC_FAIL_SIG)
     FATAL("Unable to execute '%s'", argv[0]);
 
-  classify_counts(trace_bits);
 
   if (!quiet_mode)
     SAYF("-- Program output ends --\n");
@@ -417,7 +409,7 @@ static void detect_file_args(char** argv) {
 
 static void show_banner(void) {
 
-  SAYF(cCYA "afl-showmap " cBRI VERSION cRST " by <lcamtuf@google.com>\n");
+  SAYF(cCYA "afl-vv " cBRI VERSION cRST " by <lcamtuf@google.com> modified by <smith.ian@husky.neu.edu>\n");
 
 }
 
@@ -436,8 +428,7 @@ static void usage(u8* argv0) {
        "Execution control settings:\n\n"
 
        "  -t msec       - timeout for each run (none)\n"
-       "  -m megs       - memory limit for child process (%u MB)\n"
-       "  -Q            - use binary-only instrumentation (QEMU mode)\n\n"
+       "  -m megs       - memory limit for child process (%u MB)\n\n"
 
        "Other settings:\n\n"
 
@@ -646,35 +637,11 @@ int main(int argc, char** argv) {
         if (quiet_mode) FATAL("Multiple -q options not supported");
         quiet_mode = 1;
         break;
-
-      case 'Z':
-
-        /* This is an undocumented option to write data in the syntax expected
-           by afl-cmin. Nobody else should have any use for this. */
-
-        cmin_mode  = 1;
-        quiet_mode = 1;
-        break;
-
-      case 'A':
-
-        /* Another afl-cmin specific feature. */
-        at_file = optarg;
-        break;
-
-      case 'Q':
-
-        if (qemu_mode) FATAL("Multiple -Q options not supported");
-        if (!mem_limit_given) mem_limit = MEM_LIMIT_QEMU;
-
-        qemu_mode = 1;
-        break;
-
       default:
-
         usage(argv[0]);
 
     }
+    qemu_mode=1
 
   if (optind == argc || !out_file) usage(argv[0]);
 
@@ -711,4 +678,3 @@ int main(int argc, char** argv) {
   exit(child_crashed * 2 + child_timed_out);
 
 }
-

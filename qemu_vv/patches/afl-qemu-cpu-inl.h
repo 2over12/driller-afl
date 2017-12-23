@@ -28,6 +28,7 @@
 
 #include <sys/shm.h>
 #include "../../config.h"
+#include "../../vv-struct.h"
 
 /***************************
  * VARIOUS AUXILIARY STUFF *
@@ -61,7 +62,8 @@
 
 /* This is equivalent to afl-as.h: */
 
-static unsigned char *afl_area_ptr;
+static *block first_block;                /* SHM with instrumentation bitmap   */
+
 
 /* Exported variables populated by the code patched into elfload.c: */
 
@@ -109,35 +111,22 @@ struct afl_tsl {
 
 void afl_setup(void) {
 
-  char *id_str = getenv(SHM_ENV_VAR),
-       *inst_r = getenv("AFL_INST_RATIO");
+  char *id_str = getenv(SHM_ENV_VAR);
 
   int shm_id;
 
-  if (inst_r) {
 
-    unsigned int r;
-
-    r = atoi(inst_r);
-
-    if (r > 100) r = 100;
-    if (!r) r = 1;
-
-    afl_inst_rms = MAP_SIZE * r / 100;
-
-  }
 
   if (id_str) {
 
     shm_id = atoi(id_str);
-    afl_area_ptr = shmat(shm_id, NULL, 0);
+    first_block= shmat(shm_id, NULL, 0);
 
-    if (afl_area_ptr == (void*)-1) exit(1);
+    if (first_block== (void*)-1) exit(1);
 
     /* With AFL_INST_RATIO set to a low value, we want to touch the bitmap
        so that the parent doesn't give up on us. */
-
-    if (inst_r) afl_area_ptr[0] = 1;
+    first_block=(first_block+1);
 
 
   }
@@ -158,7 +147,7 @@ void afl_forkserver(CPUArchState *env) {
 
   static unsigned char tmp[4];
 
-  if (!afl_area_ptr) return;
+  if (!first_block) return;
 
   /* Tell the parent that we're alive. If the parent doesn't want
      to talk, assume that we're not running in forkserver mode. */
@@ -178,7 +167,7 @@ void afl_forkserver(CPUArchState *env) {
 
     if (read(FORKSRV_FD, tmp, 4) != 4) exit(2);
 
-    /* Establish a channel with child to grab translation commands. We'll 
+    /* Establish a channel with child to grab translation commands. We'll
        read from t_fd[0], child will write to TSL_FD. */
 
     if (pipe(t_fd) || dup2(t_fd[1], TSL_FD) < 0) exit(3);
@@ -229,7 +218,7 @@ static inline void afl_maybe_log(abi_ulong cur_loc) {
   /* Optimize for cur_loc > afl_end_code, which is the most likely case on
      Linux systems. */
 
-  if (cur_loc > afl_end_code || cur_loc < afl_start_code || !afl_area_ptr)
+  if (cur_loc > afl_end_code || cur_loc < afl_start_code || !first_block)
     return;
 
   /* Looks like QEMU always maps to fixed locations, so we can skip this:
@@ -238,32 +227,28 @@ static inline void afl_maybe_log(abi_ulong cur_loc) {
   /* Instruction addresses may be aligned. Let's mangle the value to get
      something quasi-uniform. */
 
-  cur_loc  = (cur_loc >> 4) ^ (cur_loc << 8);
-  cur_loc &= MAP_SIZE - 1;
 
   /* Implement probabilistic instrumentation by looking at scrambled block
      address. This keeps the instrumented locations stable across runs. */
 
-  if (cur_loc >= afl_inst_rms) return;
 
-  cur_val = afl_area_ptr[cur_loc ^ prev_loc];
-
-  /* Check to see if the byte is overflowing, this should hopefully get us
-     another byte for branch hit counters. */
-  if (cur_val == 255)
+  switch(cur_loc)
   {
-    /* Yan thinks this is an acceptable hash so I do too. */
-    overflow_loc  = (cur_loc ^ prev_loc) + 1;
-    overflow_loc &= MAP_SIZE - 1;
-
-    /* Increment our overflow counter. */
-    afl_area_ptr[overflow_loc]++;
+    case first_block[prev_loc].branch1: first_block[prev_loc].count1++; break;
+    case first_block[prev_loc].branch2: first_block[prev_loc].count2++; break;
+    default:
+      if(first_block[prev_loc].branch1)
+      {
+        first_block[prev_loc].branch2=cur_loc;
+        first_block[prev_loc].count2++;
+      }else
+      {
+        first_block[prev_loc].branch1=cur_loc;
+        first_block[prev_loc].count1++;
+      }
   }
 
-  /* Now increment the original transition. */
-  afl_area_ptr[cur_loc ^ prev_loc]++;
 
-  prev_loc = cur_loc >> 1;
 
 }
 
@@ -310,4 +295,3 @@ static void afl_wait_tsl(CPUArchState *env, int fd) {
   close(fd);
 
 }
-

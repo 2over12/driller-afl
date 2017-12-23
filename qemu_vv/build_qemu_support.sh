@@ -16,7 +16,7 @@
 #
 # This script downloads, patches, and builds a version of QEMU with
 # minor tweaks to allow non-instrumented binaries to be run under
-# afl-fuzz. 
+# afl-fuzz.
 #
 # The modifications reside in patches/*. The standalone QEMU binary
 # will be written to ../afl-qemu-trace.
@@ -139,8 +139,8 @@ echo "[+] Build process successful!"
 
 echo "[*] Copying binary..."
 
-mkdir -p ../../tracers/i386
-cp -f "i386-linux-user/qemu-i386" "../../tracers/i386/afl-qemu-trace" || exit 1
+mkdir -p ../../tracers/vv
+cp -f "i386-linux-user/qemu-i386" "../../tracers/vv/afl-qemu-trace" || exit 1
 
 cd ..
 ls -l ../tracers/i386/afl-qemu-trace || exit 1
