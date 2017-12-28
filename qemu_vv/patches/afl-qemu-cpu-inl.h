@@ -124,9 +124,6 @@ void afl_setup(void) {
 
     if (first_block== (void*)-1) exit(1);
 
-    /* With AFL_INST_RATIO set to a low value, we want to touch the bitmap
-       so that the parent doesn't give up on us. */
-    first_block=(first_block+1);
 
 
   }
@@ -212,7 +209,7 @@ void afl_forkserver(CPUArchState *env) {
 
 static inline void afl_maybe_log(abi_ulong cur_loc) {
 
-  static abi_ulong prev_loc;
+  static abi_ulong prev_loc_hash,prev_loc;
 
   /* Optimize for cur_loc > afl_end_code, which is the most likely case on
      Linux systems. */
@@ -230,31 +227,31 @@ static inline void afl_maybe_log(abi_ulong cur_loc) {
 
   /* Implement probabilistic instrumentation by looking at scrambled block
      address. This keeps the instrumented locations stable across runs. */
-
-
-     printf("some stuff here %d\n",prev_loc);
-    if(cur_loc == first_block[prev_loc].branch1)
+    abi_ulong cur_loc_hash  = (cur_loc >> 4) ^ (cur_loc << 8);
+     cur_loc_hash=cur_loc_hash&(NUM_BLOCKS-1);
+      if(!first_block[prev_loc_hash].prev_loc)
+      first_block[prev_loc_hash].prev_loc=prev_loc;
+    if(cur_loc == first_block[prev_loc_hash].branch1)
     {
-      first_block[prev_loc].count1++;
-    } else if(first_block[prev_loc].branch2 == cur_loc)
+      first_block[prev_loc_hash].count1++;
+    } else if(first_block[prev_loc_hash].branch2 == cur_loc)
      {
-      first_block[prev_loc].count2++;
+      first_block[prev_loc_hash].count2++;
      }
     else
     {
-      printf("else");
-      if(first_block[prev_loc].branch1)
+
+      if(first_block[prev_loc_hash].branch1)
       {
-        printf("b2 should touch bitmap at %u with %u",prev_loc, cur_loc);
-        first_block[prev_loc].branch2=cur_loc;
-        first_block[prev_loc].count2++;
+        first_block[prev_loc_hash].branch2=cur_loc;
+        first_block[prev_loc_hash].count2++;
       }else
       {
-        printf("b1 should touch bitmap at %u with %u",prev_loc, cur_loc);
-        first_block[prev_loc].branch1=cur_loc;
-        first_block[prev_loc].count1++;
+        first_block[prev_loc_hash].branch1=cur_loc;
+        first_block[prev_loc_hash].count1++;
       }
-      prev_loc=cur_loc>>1;
+      prev_loc=cur_loc;
+      prev_loc_hash=cur_loc_hash;
     }
 
 

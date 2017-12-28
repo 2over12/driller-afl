@@ -158,7 +158,7 @@ static u32 write_results(void) {
     if(first_block[i].branch1!=0||first_block[i].branch2!=0)
     {
     ret++;
-    fprintf(f, "%06u: b1: %06u b2: %06u c1: %u c2: %u\n",i, first_block[i].branch1,first_block[i].branch2,first_block[i].count1, first_block[i].count2);
+    fprintf(f, "%u: b1: %u b2: %u c1: %u c2: %u prev: %u\n",i, first_block[i].branch1,first_block[i].branch2,first_block[i].count1, first_block[i].count2,first_block[i].prev_loc);
     }
   }
 

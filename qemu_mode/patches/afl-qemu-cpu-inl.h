@@ -28,7 +28,7 @@
 
 #include <sys/shm.h>
 #include "../../config.h"
-
+#include <stdio.h>
 /***************************
  * VARIOUS AUXILIARY STUFF *
  ***************************/
@@ -178,7 +178,7 @@ void afl_forkserver(CPUArchState *env) {
 
     if (read(FORKSRV_FD, tmp, 4) != 4) exit(2);
 
-    /* Establish a channel with child to grab translation commands. We'll 
+    /* Establish a channel with child to grab translation commands. We'll
        read from t_fd[0], child will write to TSL_FD. */
 
     if (pipe(t_fd) || dup2(t_fd[1], TSL_FD) < 0) exit(3);
@@ -225,6 +225,7 @@ static inline void afl_maybe_log(abi_ulong cur_loc) {
 
   static abi_ulong prev_loc;
   abi_ulong cur_val, overflow_loc;
+  printf("The curr_loc: %d\n",cur_loc);
 
   /* Optimize for cur_loc > afl_end_code, which is the most likely case on
      Linux systems. */
@@ -310,4 +311,3 @@ static void afl_wait_tsl(CPUArchState *env, int fd) {
   close(fd);
 
 }
-
